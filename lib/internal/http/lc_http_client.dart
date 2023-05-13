@@ -5,6 +5,8 @@ class _LCHttpClient {
 
   String appKey;
 
+  String masterKey;
+
   String? server;
 
   String sdkVersion;
@@ -19,8 +21,15 @@ class _LCHttpClient {
 
   DioCacheManager? _cacheManager;
 
-  _LCHttpClient(this.appId, this.appKey, this.server, this.sdkVersion,
-      this.apiVersion, LCQueryCache? queryCache) {
+  _LCHttpClient(
+      this.appId,
+      this.appKey,
+      this.masterKey,
+      this.server,
+      this.sdkVersion,
+      this.apiVersion,
+      LCQueryCache? queryCache,
+      HttpClientAdapter? httpClientAdapter) {
     _appRouter = new _LCAppRouter(appId, server);
     BaseOptions options = new BaseOptions(headers: {
       'X-LC-Id': appId,
@@ -30,6 +39,9 @@ class _LCHttpClient {
     if (queryCache != null) {
       _cacheManager = new DioCacheManager(CacheConfig());
       _dio.interceptors.add(_cacheManager!.interceptor);
+    }
+    if (httpClientAdapter != null) {
+      _dio.httpClientAdapter = httpClientAdapter;
     }
   }
 
@@ -132,12 +144,16 @@ class _LCHttpClient {
 
   Future<Map<String, dynamic>> _generateHeaders(
       Map<String, dynamic>? additionalHeaders) async {
+    final master = masterKey.isNotEmpty;
     Map<String, dynamic> headers = new Map<String, dynamic>();
     int timestamp = DateTime.now().millisecondsSinceEpoch;
-    Uint8List data = Utf8Encoder().convert('$timestamp$appKey');
+    Uint8List data = master
+        ? Utf8Encoder().convert('$timestamp$masterKey')
+        : Utf8Encoder().convert('$timestamp$appKey');
     Digest digest = md5.convert(data);
     String sign = hex.encode(digest.bytes);
-    headers['X-LC-Sign'] = '$sign,$timestamp';
+    headers['X-LC-Sign'] =
+        master ? '$sign,$timestamp,master' : '$sign,$timestamp';
     LCUser? currentUser = await LCUser.getCurrent();
     if (currentUser != null) {
       headers['X-LC-Session'] = currentUser.sessionToken;
